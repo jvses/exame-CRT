@@ -2,6 +2,9 @@
 #include <string.h> // Para memcpy()
 #include <stdlib.h>
 #include <ctype.h>
+#include <inttypes.h>//para printar o tempo certo
+
+
 #include "pico/stdlib.h"
 // #include "hardware/dma.h"
 #include "hardware/pio.h"
@@ -11,7 +14,8 @@
 #include "pico/time.h"
 #include "hardware/irq.h"
 #include "pico/rand.h"//gerador de valores aleatórios
-#include <inttypes.h>//para printar o tempo certo
+
+
 //bibliotecas para display OLED
 #include "pico/binary_info.h"
 #include "inc/ssd1306.h"
@@ -36,10 +40,9 @@
 #define ADC_CHANNEL_0  0 // Canal ADC para o eixo X do joystick
 #define ADC_CHANNEL_1  1 // Canal ADC para o eixo Y do joystick
 #define SW  22           // Pino de leitura do botão do joystick
-#define THRESHOLD_X_LOW 1000  // Limiar mínimo para X
-#define THRESHOLD_X_HIGH 3000 // Limiar máximo para X
-#define THRESHOLD_Y_LOW 1000  // Limiar mínimo para Y
-#define THRESHOLD_Y_HIGH 3000 // Limiar máximo para Y
+
+#define THRESHOLD_ADC_LOW 1000  // Limiar mínimo para Y
+#define THRESHOLD_ADC_HIGH 3000 // Limiar máximo para Y
 
 #define TURN_LIMIT 5 //limite de turnos para o exame 
 
@@ -55,7 +58,7 @@
 // volatile uint16_t adc_x = 2048; // Valor inicia artificial de X (centro)
 // volatile uint16_t adc_y = 2048; // Valor inicia artificial de Y (centro)
 volatile uint16_t vrx_value, vry_value, sw_value; // Variáveis para armazenar os valores do joystick (eixos X e Y) e botão
-volatile uint8_t aux=8;
+volatile uint8_t aux=8; //Variável auxiliar que alinha seu valor de acordo para onde o joystick está apontado.
 volatile uint8_t sign_placa={0};
 volatile bool sign_change = false;
 volatile bool exam_started = false;
@@ -71,6 +74,7 @@ volatile int64_t respose_time={0};//tempo de resposta
 volatile int8_t nivel={1};
 
 volatile absolute_time_t time_start_counting; 
+volatile absolute_time_t debounce_timer_aux;
 
 // #define ADC_BUFFER_SIZE 2     // Tamanho do buffer (2 amostras: X e Y)
 // uint16_t adc_buffer[ADC_BUFFER_SIZE] = {0}; // Buffer para armazenar X e Y
@@ -375,7 +379,7 @@ if(novo_tempo && exam_started){
     // printf("Estou preso no loop\n");
     char time_impress[20]={}, index[2], buffer_ms1[16];
 
-    uint8_to_str(i, index, sizeof(index));
+    uint8_to_str(i+1, index, sizeof(index));
     double_to_str(tempo_turnos[i], buffer_ms1, sizeof(buffer_ms1));
 
     strncat(time_impress,index,sizeof(index));
@@ -408,7 +412,7 @@ if(novo_tempo && exam_started){
     npClear();
     npSetWait(LOW_BRIGHT,LOW_BRIGHT,0);
     npWrite();
-    sleep_ms(10000);
+    sleep_ms(100);
     exam_started=false;
   }
  
@@ -427,6 +431,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){//inicia exame e/ou reinicia
       exam_started=false;
     }else{
       exam_started=true;
+      time_start_counting = get_absolute_time();
     }
 } else if (gpio == BUTTON_B) {
   // printf("Interrompi B\n");
@@ -461,11 +466,11 @@ void setup_buttons(){
   gpio_init(BUTTON_A);
   gpio_set_dir(BUTTON_A, GPIO_IN);
   gpio_pull_up(BUTTON_A); // Habilita o resistor pull-up interno para evitar leituras incorretas.
-  gpio_set_irq_enabled(BUTTON_A, GPIO_IRQ_EDGE_FALL,true);
+  gpio_set_irq_enabled(BUTTON_A, GPIO_IRQ_EDGE_RISE,true);
   gpio_init(BUTTON_B);
   gpio_set_dir(BUTTON_B, GPIO_IN);
   gpio_pull_up(BUTTON_B); // Habilita o resistor pull-up interno para evitar leituras incorretas.
-  gpio_set_irq_enabled(BUTTON_B, GPIO_IRQ_EDGE_FALL,true);
+  gpio_set_irq_enabled(BUTTON_B, GPIO_IRQ_EDGE_RISE,true);
 
   // Configura o handler global de interrupções
   gpio_set_irq_callback(gpio_irq_handler);
@@ -493,7 +498,7 @@ int main(){
   npSetWait(LOW_BRIGHT,0,LOW_BRIGHT);//ampulheta
   npWrite(); // Escreve os dados nos LEDs.
 
-  sleep_ms(5000);
+  sleep_ms(1000);
   memset(ssd, 0, ssd1306_buffer_length);
 
   printf("Começando as configurações\n");

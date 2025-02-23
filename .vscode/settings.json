@@ -39,6 +39,7 @@
     "files.associations": {
         "dma.h": "c",
         "*.pio": "cpp",
-        "irq.h": "c"
+        "irq.h": "c",
+        "rand.h": "c"
     }
 }
