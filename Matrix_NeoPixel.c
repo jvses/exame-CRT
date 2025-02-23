@@ -4,9 +4,8 @@
 #include <ctype.h>
 #include <inttypes.h>//para printar o tempo certo
 
-
+//bibliotecas do SDK
 #include "pico/stdlib.h"
-// #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 #include "hardware/adc.h" // Biblioteca para manipulação do ADC no RP2040
@@ -15,17 +14,13 @@
 #include "hardware/irq.h"
 #include "pico/rand.h"//gerador de valores aleatórios
 
-
 //bibliotecas para display OLED
 #include "pico/binary_info.h"
 #include "inc/ssd1306.h"
 #include "hardware/i2c.h"
 
-
-
 // Biblioteca gerada pelo arquivo .pio durante compilação.
 #include "ws2818b.pio.h"
-// #include "blink.pio.h"
 
 #define LED_COUNT 25
 #define LED_NEOPIN 7
@@ -40,23 +35,18 @@
 #define ADC_CHANNEL_0  0 // Canal ADC para o eixo X do joystick
 #define ADC_CHANNEL_1  1 // Canal ADC para o eixo Y do joystick
 #define SW  22           // Pino de leitura do botão do joystick
-
 #define THRESHOLD_ADC_LOW 1000  // Limiar mínimo para Y
 #define THRESHOLD_ADC_HIGH 3000 // Limiar máximo para Y
-
 #define TURN_LIMIT 5 //limite de turnos para o exame 
 
 //Display OLED
 #define I2C_SDA  14
 #define I2C_SCL  15
 
-
 //definições de botões A e B
 #define BUTTON_A  5 
 #define BUTTON_B  6
 
-// volatile uint16_t adc_x = 2048; // Valor inicia artificial de X (centro)
-// volatile uint16_t adc_y = 2048; // Valor inicia artificial de Y (centro)
 volatile uint16_t vrx_value, vry_value, sw_value; // Variáveis para armazenar os valores do joystick (eixos X e Y) e botão
 volatile uint8_t aux=8; //Variável auxiliar que alinha seu valor de acordo para onde o joystick está apontado.
 volatile uint8_t sign_placa={0};
@@ -76,11 +66,6 @@ volatile int8_t nivel={1};
 volatile absolute_time_t time_start_counting; 
 volatile absolute_time_t debounce_timer_aux;
 
-// #define ADC_BUFFER_SIZE 2     // Tamanho do buffer (2 amostras: X e Y)
-// uint16_t adc_buffer[ADC_BUFFER_SIZE] = {0}; // Buffer para armazenar X e Y
-// volatile bool new_data_ready = false;          // Flag para indicar novos dados
-// volatile int dma_channel;              // Canal DMA
-// volatile bool dma_complete = false; // Flag para indicar conclusão do DMA
 
 //declaração global do OLED para usar em funções fora da main
 uint8_t ssd[ssd1306_buffer_length];
@@ -211,7 +196,6 @@ void npSetArrow(uint8_t direcao){
       memcpy(leds_addrs, aux_def, sizeof(leds_addrs));
     break;
   }
-
   for(int i=0; i< 9;i++){
     npSetLED(leds_addrs[i],LOW_BRIGHT,LOW_BRIGHT,LOW_BRIGHT);
   }
@@ -255,44 +239,41 @@ uint8_t joy_arrow(uint16_t x_val, uint16_t y_val){
   //menor que 1000, está baixo
   //entre 1000 e 3000 está no meio
   // maior que 3000 está alto
-  if(y_val >= 1000 && y_val<= 3000 && x_val >= 3000 ){
+  if(y_val >= THRESHOLD_ADC_LOW && y_val<= THRESHOLD_ADC_HIGH && x_val >= THRESHOLD_ADC_HIGH ){
     return 0;//aponta para norte
-  }else if(x_val>=3000 && y_val>=3000){
+  }else if(x_val>=THRESHOLD_ADC_HIGH && y_val>=THRESHOLD_ADC_HIGH){
     return 1; //nordeste
-  }else if(y_val>= 3000 && x_val >= 1000 && x_val <=3000){
+  }else if(y_val>= THRESHOLD_ADC_HIGH && x_val >= THRESHOLD_ADC_LOW && x_val <=THRESHOLD_ADC_HIGH){
     return 2; //Leste
-  }else if(x_val<=1000 && y_val>= 3000){
+  }else if(x_val<=THRESHOLD_ADC_LOW && y_val>= THRESHOLD_ADC_HIGH){
     return 3; //Suldeste
-  }else if(y_val >= 1000 && y_val<= 3000 && x_val <= 1000){
+  }else if(y_val >= THRESHOLD_ADC_LOW && y_val<= THRESHOLD_ADC_HIGH && x_val <= THRESHOLD_ADC_LOW){
     return 4; //Sul
-  }else if(x_val<=1000 && y_val<=1000){
+  }else if(x_val<=THRESHOLD_ADC_LOW && y_val<=THRESHOLD_ADC_LOW){
     return 5; //suldoeste
-  }else if(y_val<=1000 && x_val >= 1000 && x_val<= 3000){
+  }else if(y_val<=THRESHOLD_ADC_LOW && x_val >= THRESHOLD_ADC_LOW && x_val<= THRESHOLD_ADC_HIGH){
     return 6; //Oeste
-  }else if( x_val>=3000 && y_val<=1000){
+  }else if( x_val>=THRESHOLD_ADC_HIGH && y_val<=THRESHOLD_ADC_LOW){
     return 7; //Noroeste
   }else{ return 8; }
 
 }
 
-void npSetWait(uint8_t r, uint8_t g, uint8_t b){
+void npSetWait(uint8_t r, uint8_t g, uint8_t b){//desenha ampulheta
   uint8_t leds_addrs[]={24,23,22,21,20,18,16,12,6,8,4,3,2,1,0};
   for(int i=0; i<15;i++){
     npSetLED(leds_addrs[i],r,g,b);
-
   }
 }
 
 // Função para configurar o joystick (pinos de leitura, ADC e interrupção)
 void setup_joystick(){
-printf("Ativando ADC\n");
 // Inicializa o ADC e os pinos de entrada analógica
 adc_init();         // Inicializa o módulo ADC
 adc_gpio_init(VRX); // Configura o pino VRX (eixo X) para entrada ADC
 adc_gpio_init(VRY); // Configura o pino VRY (eixo Y) para entrada ADC
 // Configura a interrupção do ADC
 adc_select_input(ADC_CHANNEL_0); // Seleciona ADC0 inicialmente é necessário selecionar par configurar o round robin
-printf("5-Habilitando interrupção\n");
 
 // Inicializa o pino do botão do joystick
 gpio_init(SW);             // Inicializa o pino do botão
@@ -322,25 +303,19 @@ uint8_t rand_sign(){//função para pegar valor aleatório entre 0 e 7
 
 bool repeating_reader(struct repeating_timer *t){
   joystick_read_axis();
-  // printf("X_axis=%d | Y_axis=%d \n",vrx_value,vry_value);
   aux = joy_arrow(vrx_value,vry_value);
   if(sign_placa == aux && sign_change==false){//vê se o paciente colocou na direção certa 
-    // respose_time = absolute_time_diff_us(time_start_counting, get_absolute_time());
-    // printf("Tempo de resposta = %d \n",respose_time);
+
     // Buffers para as strings (tamanho seguro para ambos os casos)
     absolute_time_t now = get_absolute_time();
     respose_time = absolute_time_diff_us(time_start_counting, now);
     
-
-
-    printf("Tempo: %" PRId64 " µs (%.3f ms)\n", respose_time, (double)respose_time / 1000.0);
     sign_placa =  rand_sign();//atualiza novo sinal para placa
     sign_change=true;
   }
 }
 
 void oled_clear(){
-    // uint8_t ssd[ssd1306_buffer_length];
     memset(ssd, 0, ssd1306_buffer_length);
     render_on_display(ssd, &frame_area);
 }
@@ -350,7 +325,6 @@ void msg_print_nivel(){
   uint8_to_str(nivel, level, sizeof(level));
   char msg_nivel[]="Nivel:";
   strncat(msg_nivel, level, sizeof(level));
-  // ssd1306_draw_string(ssd, 5, 0, "Testando");
   memset(ssd, 0, ssd1306_buffer_length);//limpa o buffer
   ssd1306_draw_string(ssd,3,0,msg_nivel);//escreve o nível
 }
@@ -370,32 +344,23 @@ if(novo_tempo && exam_started){
   uint8_to_str(nivel, level, sizeof(level));
   char msg_nivel[]="Nivel:";
   strncat(msg_nivel, level, sizeof(level));
-  // ssd1306_draw_string(ssd, 5, 0, "Testando");
   memset(ssd, 0, ssd1306_buffer_length);//limpa o buffer
   ssd1306_draw_string(ssd,3,0,msg_nivel);//escreve o nível
   render_on_display(ssd, &frame_area);
-  // y = 8;
   for(uint8_t i=0; i< contador_turnos ;i++){//for para escrever todos os tempos pegos
-    // printf("Estou preso no loop\n");
     char time_impress[20]={}, index[2], buffer_ms1[16];
-
     uint8_to_str(i+1, index, sizeof(index));
     double_to_str(tempo_turnos[i], buffer_ms1, sizeof(buffer_ms1));
-
     strncat(time_impress,index,sizeof(index));
     strncat(time_impress,"T ", 3 );
     strncat(time_impress,buffer_ms1,sizeof(buffer_ms1));
 
-    printf("Strings observadas: Index = %s | buffer_ms1 = %s | time_impress = %s\n", index, buffer_ms1,time_impress);
-    
     ssd1306_draw_string(ssd,5,y,time_impress);
     y+=8;
   }
   render_on_display(ssd, &frame_area);
-  // printf("saí do loop\n");
 
   if(contador_turnos == 5){//se for o caso, vai agora exibir a média
-    printf("vou escrever a média\n");
     double soma = 0.0f; // Inicializa a soma como 0.0
     char buffer_media[10],msg_med[18]="tm i ";
 
@@ -403,6 +368,7 @@ if(novo_tempo && exam_started){
     for (uint8_t i = 0; i < TURN_LIMIT; i++) {
         soma += tempo_turnos[i];
     }
+
     soma/=5;
     double_to_str(soma, buffer_media, sizeof(buffer_media));
     strncat(msg_med,buffer_media,sizeof(buffer_media));
@@ -415,17 +381,12 @@ if(novo_tempo && exam_started){
     sleep_ms(100);
     exam_started=false;
   }
- 
   novo_tempo=false;
-
-
   }
 }
 
 void gpio_irq_handler(uint gpio, uint32_t events){//inicia exame e/ou reinicia
   if (gpio == BUTTON_A) {
-    printf("Interrompi A gpio:%d \n", gpio);
-    // sleep_ms(3);//pequeno debounce
     if(exam_started){
       contador_turnos=0;
       exam_started=false;
@@ -434,7 +395,6 @@ void gpio_irq_handler(uint gpio, uint32_t events){//inicia exame e/ou reinicia
       time_start_counting = get_absolute_time();
     }
 } else if (gpio == BUTTON_B) {
-  // printf("Interrompi B\n");
   switch (nivel)
   {
     case  1:
@@ -480,16 +440,13 @@ void setup_buttons(){
 
 int main(){
   sign_placa =  rand_sign();//pega um valor aleatório para o sinal ne início
-  // sleep_ms(2000);
   uint16_t vrx_value, vry_value, sw_value; // Variáveis para armazenar os valores do joystick (eixos X e Y) e botão
-  stdio_init_all();
   setup_OLED();
   setup_buttons();
   calculate_render_area_buffer_length(&frame_area);
 
   // zera o display inteiro
   oled_clear();
-  // restart:
 
   // Inicializa matriz de LEDs NeoPixel.
   npInit(LED_NEOPIN);
@@ -498,70 +455,47 @@ int main(){
   npSetWait(LOW_BRIGHT,0,LOW_BRIGHT);//ampulheta
   npWrite(); // Escreve os dados nos LEDs.
 
-  sleep_ms(1000);
+  sleep_ms(500);
   memset(ssd, 0, ssd1306_buffer_length);
-
-  printf("Começando as configurações\n");
 
   struct repeating_timer timer;
   add_repeating_timer_ms(5, repeating_reader, NULL, &timer);
 
-  // uint8_t num={0};
-
-
   setup_joystick(); 
-  printf("Joystick\n");
   time_start_counting = get_absolute_time();
 
     // //imprime informações(nível e tempos) no OLED uma primeira vez
     msg_inicio();
 
-
-
   // Não faz mais nada. Loop infinito.
   while (true) {
-    // joystick_read_axis(&vrx_value, &vry_value);
-    // tight_loop_contents();
-    // sleep_ms(100);
 
       oled_print_info();
       if(exam_started){
-      // printf("X_axis=%d | Y_axis=%d \n",vrx_value,vry_value);
       if(!sign_change){ //se o sinal não tiver mudado
-        // printf("não mudou a placa dir=%d\n",sign_placa);
-
         npClear();
         npSetArrow(sign_placa);
         npWrite();
         sleep_us(100);//pausa pequena para polpar esforço
       }else{//se ele for verdadeiro
-        // sign_change=false;
-
-        // printf("Tempo de resposta = %d \n",respose_time);
         char buffer_us[20];  // Para microssegundos (ex: "-9223372036854775808")
         char buffer_ms[16];  // Para milissegundos (ex: "-123456789.123")
         // Conversão para strings:
         int64_to_str(respose_time, buffer_us, sizeof(buffer_us));
         double_to_str(((double)respose_time / 1000), buffer_ms, sizeof(buffer_ms));
-        // printf("Tempo2: %s us | %s ms\n",buffer_us,buffer_ms);
-
         msg_print_nivel();
         render_on_display(ssd, &frame_area);
-        // printf("Tempo2: %" PRId64 " µs (%.3f ms)\n", respose_time, (double)respose_time / 1000.0);
-
         tempo_turnos[contador_turnos]=((float)respose_time / 1000);
+
         //checagem de contador de turnos
         contador_turnos++;
-        printf("Contador: %d \n", contador_turnos);
         novo_tempo=true;
         if(contador_turnos>TURN_LIMIT){
-          printf("contador passou do ponto: %d \n", contador_turnos);
           contador_turnos=0;
         }
         npClear();
-        // (contador_turnos>=5) ? (npSetWait(LOW_BRIGHT,0,0)):(npSetWait(LOW_BRIGHT,0,LOW_BRIGHT));
-        // npSetWait();//ampulheta
-        npSetWait(LOW_BRIGHT,0,LOW_BRIGHT);
+
+        npSetWait(LOW_BRIGHT,0,LOW_BRIGHT);//ampulheta
         npWrite();
         sleep_ms(tempo_de_espera);
 
